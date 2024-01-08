@@ -3,23 +3,23 @@ import {ItemListComponent} from "../../components/ItemListComponent.jsx";
 import {Space, Modal, TextInput, FileButton, Button, Text, Image, Center, NumberInput} from "@mantine/core";
 import {useDisclosure} from "@mantine/hooks";
 import {firestore, storage} from "../../../firebaseConfig.js";
-import {ref, uploadBytes,getDownloadURL} from "firebase/storage";
-import { doc, setDoc, collection,query,where,onSnapshot } from "firebase/firestore";
+import {ref, uploadBytes, getDownloadURL} from "firebase/storage";
+import {doc, setDoc, collection, query, where, onSnapshot} from "firebase/firestore";
 
 const MODAL_TITLES_BY_CATEGORY = {
-    "bottle" : "Add new bottle",
-    "syrup" : "Add new syrup",
-    "cylinder" : "Add new cylinder",
+    "bottle": "Add new bottle",
+    "syrup": "Add new syrup",
+    "cylinder": "Add new cylinder",
 }
 
-const MOCK_HOUSEHOLD = "EwxUhi08NUBPhgkPdh7n"
+const MOCK_HOUSEHOLD_ID = "EwxUhi08NUBPhgkPdh7n"
 
 export function ItemsListPage() {
+    const [isModalOpen, modalHandlers] = useDisclosure(false)
 
     const [bottleList, setBottleList] = useState([])
     const [syrupList, setSyrupList] = useState([])
     const [cylinderList, setCylinderList] = useState([])
-    const [isModalOpen, modalHandlers] = useDisclosure(false)
     const [newItemCategory, setNewItemCategory] = useState("")
     const [newItemImage, setNewItemImage] = useState(null)
     const [newItemName, setNewItemName] = useState('')
@@ -27,26 +27,27 @@ export function ItemsListPage() {
     const [isCompleted, setIsCompleted] = useState(false)
     const [isNewItemLoading, setIsNewItemLoading] = useState(false)
 
-    const getItemsByCategory = async (householdId,category,onItemsChange) =>{
-        const itemsQuery = query(collection(firestore,`households/${householdId}/items`),where("category","==",category))
-        onSnapshot(itemsQuery,async (snapshot) => {
-            const itemList = []
-            for (const doc of snapshot.docs) {
+    // Function to get items from Firestore by category
+    const getItemsByCategory = async (householdId, category, onItemsChange) => {
+        const itemsQuery = query(collection(firestore, `households/${householdId}/items`), where("category", "==", category))
+        onSnapshot(itemsQuery, async (snapshot) => {
+            // Map result to list
+            const itemList = snapshot.docs.map(async (doc) => {
                 const item = doc.data()
-                item.image = await getDownloadURL(ref(storage,doc.ref.path.toString()))
-                item.id=doc.id
-                itemList.push(item)
-            }
-
-            onItemsChange(itemList)
+                item.image = await getDownloadURL(ref(storage, doc.ref.path.toString()))
+                item.id = doc.id
+                return item
+            })
+            const resolvedItems = await Promise.all(itemList)
+            onItemsChange(resolvedItems)
         })
     }
 
     // Set observers for each category
     useEffect(() => {
-        getItemsByCategory(MOCK_HOUSEHOLD,"bottle",setBottleList)
-        getItemsByCategory(MOCK_HOUSEHOLD,"syrup",setSyrupList)
-        getItemsByCategory(MOCK_HOUSEHOLD,"cylinder",setCylinderList)
+        getItemsByCategory(MOCK_HOUSEHOLD_ID, "bottle", setBottleList)
+        getItemsByCategory(MOCK_HOUSEHOLD_ID, "syrup", setSyrupList)
+        getItemsByCategory(MOCK_HOUSEHOLD_ID, "cylinder", setCylinderList)
     }, []);
 
     const resetValuesToDefault = () => {
@@ -58,24 +59,22 @@ export function ItemsListPage() {
     const handleNewItemConfirm = async () => {
         setIsNewItemLoading(true)
 
-        const newItemRef = doc(collection(firestore, `households/${MOCK_HOUSEHOLD}/items`));
+        const newItemRef = doc(collection(firestore, `households/${MOCK_HOUSEHOLD_ID}/items`));
         try {
             const storageRef = ref(storage, newItemRef.path);
             await uploadBytes(storageRef, newItemImage)
-            await setDoc(newItemRef,{
-                capacity:newItemCapacity,
-                name:newItemName,
-                category:newItemCategory
+            await setDoc(newItemRef, {
+                capacity: newItemCapacity,
+                name: newItemName,
+                category: newItemCategory
             })
             modalHandlers.close()
             setNewItemImage(null)
             setNewItemName('')
             setNewItemCapacity(1000)
-        }
-        catch (e){
+        } catch (e) {
             console.log(e.message)
-        }
-        finally {
+        } finally {
             setIsNewItemLoading(false)
         }
     }
@@ -118,7 +117,8 @@ export function ItemsListPage() {
     return (<>
 
             {/*Modal to add new items*/}
-            <Modal opened={isModalOpen} onClose={modalHandlers.close} title={MODAL_TITLES_BY_CATEGORY[newItemCategory]} centered
+            <Modal opened={isModalOpen} onClose={modalHandlers.close} title={MODAL_TITLES_BY_CATEGORY[newItemCategory]}
+                   centered
                    style={{alignItems: "center"}}>
                 <TextInput
                     placeholder={"Item name"}
