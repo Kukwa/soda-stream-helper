@@ -1,7 +1,3 @@
-export function DeclareUsagePage(){
-    return(
-        <>
-            Declare
-        </>
-    )
+export function DeclareUsagePage() {
+  return <>Declare</>;
 }

@@ -1,10 +1,5 @@
 function DashboardPage() {
-
-    return (
-        <>
-            MAIN DASHBOARD
-        </>
-    )
+  return <>MAIN DASHBOARD</>;
 }
 
-export default DashboardPage
+export default DashboardPage;
