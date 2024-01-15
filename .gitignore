@@ -23,5 +23,8 @@ dist-ssr
 *.sln
 *.sw?
 
-#Environmental variables
+# Environmental variables
 .env
+
+# Firebase
+.firebase
