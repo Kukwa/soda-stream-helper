@@ -15,6 +15,7 @@ import { ProtectedRoute } from "./pages/ProtectedRoute.jsx";
 import { AuthLayout } from "./components/layouts/AuthLayout.jsx";
 import "@mantine/charts/styles.css";
 import { ItemsListPage } from "./pages/dashboard/ItemsListPage.jsx";
+import { ItemmDetailsPage } from "./pages/dashboard/ItemDetailsPage.jsx";
 
 const router = createBrowserRouter([
   {
@@ -54,6 +55,10 @@ const router = createBrowserRouter([
             path: "items",
             element: <ItemsListPage />,
           },
+          {
+            path:"items/:id",
+            element:<ItemmDetailsPage/>
+          }
         ],
       },
     ],

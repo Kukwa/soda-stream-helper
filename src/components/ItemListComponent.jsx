@@ -10,7 +10,7 @@ export function ItemListComponent(props) {
       <SimpleGrid cols={{ sm: 2, lg: 4 }} spacing="lg" verticalSpacing="xl">
         {props.items.map((item) => {
           return (
-            <ItemListButton key={item.id} image={item.image} name={item.name} />
+            <ItemListButton key={item.id} id={item.id} image={item.image} name={item.name} />
           );
         })}
         <AddItemButton onClick={props.onAddClick}></AddItemButton>

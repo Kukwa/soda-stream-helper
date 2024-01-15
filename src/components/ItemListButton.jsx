@@ -6,15 +6,12 @@ import {
   Text,
   UnstyledButton,
 } from "@mantine/core";
+import { NavLink } from "react-router-dom";
 
 // Button with image and name of an item on the dashboard
 export function ItemListButton(props) {
-  // Function to handle onClick
-  const handleClick = () => {
-    alert(`clicked ${props.name}`);
-  };
-
   return (
+    <NavLink to={`${props.id}`}>
     <Center mb={30}>
       <AspectRatio ratio={1} w="50%">
         <UnstyledButton
@@ -23,7 +20,6 @@ export function ItemListButton(props) {
             border: "#000000",
             borderWidth: "1px",
           }}
-          onClick={handleClick}
         >
           <Paper withBorder shadow="xl" p="xl">
             <Center>
@@ -42,5 +38,6 @@ export function ItemListButton(props) {
         </UnstyledButton>
       </AspectRatio>
     </Center>
+    </NavLink>
   );
 }
