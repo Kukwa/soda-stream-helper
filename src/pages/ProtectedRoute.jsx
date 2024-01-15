@@ -3,12 +3,13 @@ import { useContext } from "react";
 import { Context } from "../context/AuthContext.jsx";
 // Used to protect routes that are only available to signed in users
 export function ProtectedRoute({ children }) {
-  const { user } = useContext(Context);
+  const { user,householdId } = useContext(Context);
 
   if (!user) {
     return <Navigate to="/login" replace />;
   } else {
-    return children;
+    if (householdId !== "") return children;
+    return <Navigate to={"/"} replace />;
   }
 }
 
