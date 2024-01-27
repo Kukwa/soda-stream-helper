@@ -10,6 +10,8 @@ import {
   Image,
   Center,
   NumberInput,
+  ColorPicker,
+  ColorInput,
 } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { firestore, storage } from "../../../firebaseConfig.js";
@@ -40,6 +42,7 @@ export function ItemsListPage() {
   const [newItemCategory, setNewItemCategory] = useState("");
   const [newItemImage, setNewItemImage] = useState(null);
   const [newItemName, setNewItemName] = useState("");
+  const [newSyrupColor, setNewSyrupColor] = useState("#000000");
   const [newItemCapacity, setNewItemCapacity] = useState(1000);
   const [isCompleted, setIsCompleted] = useState(false);
   const [isNewItemLoading, setIsNewItemLoading] = useState(false);
@@ -87,11 +90,19 @@ export function ItemsListPage() {
     try {
       const storageRef = ref(storage, newItemRef.path);
       await uploadBytes(storageRef, newItemImage);
-      await setDoc(newItemRef, {
-        capacity: newItemCapacity,
-        name: newItemName,
-        category: newItemCategory,
-      });
+      if (newItemCategory == "syrup")
+        await setDoc(newItemRef, {
+          capacity: newItemCapacity,
+          name: newItemName,
+          category: newItemCategory,
+          color: newSyrupColor,
+        });
+      else
+        await setDoc(newItemRef, {
+          capacity: newItemCapacity,
+          name: newItemName,
+          category: newItemCategory,
+        });
       modalHandlers.close();
       setNewItemImage(null);
       setNewItemName("");
@@ -178,6 +189,19 @@ export function ItemsListPage() {
           value={newItemCapacity}
         />
         <Space h="md" />
+        {newItemCategory == "syrup" && (
+          <Center>
+            <ColorInput
+              mt="md"
+              label="Syrup color"
+              description="Syrup color that will be shown on charts"
+              w={"100%"}
+              value={newSyrupColor}
+              onChange={setNewSyrupColor}
+            />
+            <Space h="xs" />
+          </Center>
+        )}
 
         {isCompleted && (
           <Center>
