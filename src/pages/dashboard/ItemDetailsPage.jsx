@@ -5,12 +5,14 @@ import {
   addDoc,
   collection,
   doc,
+  getAggregateFromServer,
   getDoc,
   getDocs,
   orderBy,
   query,
   serverTimestamp,
   setDoc,
+  sum,
   where,
 } from "firebase/firestore";
 import { Context } from "./../../context/AuthContext";
@@ -28,35 +30,7 @@ import {
   Text,
 } from "@mantine/core";
 import { getDownloadURL, ref } from "firebase/storage";
-import { AreaChart } from "@mantine/charts";
-
-export const data = [
-  {
-    date: "Mar 22",
-    water: 2890,
-    syrup: 2338,
-  },
-  {
-    date: "Mar 23",
-    water: 2756,
-    syrup: 2103,
-  },
-  {
-    date: "Mar 24",
-    water: 3322,
-    syrup: 986,
-  },
-  {
-    date: "Mar 25",
-    water: 3470,
-    syrup: 2108,
-  },
-  {
-    date: "Mar 26",
-    water: 3129,
-    syrup: 1726,
-  },
-];
+import { AreaChart, BarChart, DonutChart } from "@mantine/charts";
 
 export function ItemmDetailsPage() {
   const { id: itemId } = useParams();
@@ -73,6 +47,7 @@ export function ItemmDetailsPage() {
   const [declareCylinderId, setDeclareCylinderId] = useState("");
 
   const [historyChartData, setHistoryChartData] = useState(null);
+  const [chartLabels, setChartLabels] = useState(null);
   const [usagePerUserChartData, setUsagePerUserChartData] = useState(null);
   const [historyData, setHistoryData] = useState([]);
   const [users, setUsers] = useState([]);
@@ -83,13 +58,17 @@ export function ItemmDetailsPage() {
 
   useEffect(() => {
     handleDeclareUsage();
-    handleGetHistory();
   }, [item]);
 
-  useEffect(() => {}, [historyData]);
+  useEffect(() => {
+    handleGetHistory();
+  }, [itemList]);
+
+  useEffect(() => {}, [historyData, usagePerUserChartData]);
 
   const handleItemLoad = async () => {
     const path = `households/${householdId}/items/${itemId}`;
+    console.log(path);
     const item = (await getDoc(doc(firestore, path))).data();
     item.id = itemId;
     item.image = await getDownloadURL(ref(storage, path));
@@ -110,13 +89,12 @@ export function ItemmDetailsPage() {
   };
 
   const handleGetHistory = async () => {
-    if (!item) {
+    if (!item && itemList.length == 0) {
       setIsItemHistoryLoading(true);
       return;
     }
     const historyPath = `households/${householdId}/history`;
     const usersPath = `users`;
-    console.log(item)
     const historyQuery = query(
       collection(firestore, historyPath),
       where(`${item.category}Id`, "==", item.id),
@@ -134,13 +112,13 @@ export function ItemmDetailsPage() {
       where(`householdId`, "==", householdId)
     );
     const usersRef = await getDocs(usersQuery);
-    const users = usersRef.docs.map((docRef) => {
-      const item = docRef.data();
-      item.id = docRef.id;
-      return item;
+    const usersList = usersRef.docs.map((docRef) => {
+      const data = docRef.data();
+      data.id = docRef.id;
+      return data;
     });
 
-    setUsers(users);
+    setUsers(usersList);
     setHistoryData(historyData);
     setIsItemHistoryLoading(false);
 
@@ -151,7 +129,9 @@ export function ItemmDetailsPage() {
     let currentDate = new Date(today);
     let historyIndex = 0;
     let currentData = { date: currentDate.toDateString() };
-    while (mainChartData.length < 7) {
+    const chartLabels = [{ name: "Water", color: "indigo.6" }];
+    console.log(itemList);
+    while (mainChartData.length < 7 && historyIndex < historyData.length - 1) {
       if (
         currentDate.toDateString() ==
         historyData[historyIndex].timestamp.toDate().toDateString()
@@ -159,21 +139,54 @@ export function ItemmDetailsPage() {
         const key =
           historyData[historyIndex].syrupId == ""
             ? "Water"
-            : itemList.find(
-                (item) => item.id == historyData[historyIndex].syrupId
-              ).name;
+            : itemList.find((item) => {
+                console.log(item.id, historyData[historyIndex].syrupId);
+                return item.id == historyData[historyIndex].syrupId;
+              }).name;
+        console.log(key);
+
+        if (chartLabels.find((label) => label.name == key) == undefined) {
+          const color = itemList.find(
+            (item) => item.id == historyData[historyIndex].syrupId
+          ).color;
+          chartLabels.push({ name: key, color: color });
+        }
+
         currentData[key] =
           currentData[key] == null
             ? historyData[historyIndex].capacity
-            : Number(currentData[key]) + Number(historyData[historyIndex].capacity);
+            : Number(currentData[key]) +
+              Number(historyData[historyIndex].capacity);
         historyIndex++;
       } else {
-        currentDate = new Date(currentDate - (24 * 60 * 60 * 1000));
+        currentDate = new Date(currentDate - 24 * 60 * 60 * 1000);
         mainChartData.push(currentData);
         currentData = { date: currentDate.toDateString() };
       }
     }
-    console.log(mainChartData);
+
+    const perUserChartData = [];
+
+    for (const userData of usersList) {
+      const perUserChartQuery = query(
+        collection(firestore, `households/${householdId}/history`),
+        where("userId", "==", userData.id),
+        where(`${item.category}Id`,"==",itemId)
+      );
+      const snapshot = await getAggregateFromServer(perUserChartQuery, {
+        total: sum("capacity"),
+      });
+      perUserChartData.push({
+        name: userData.displayName,
+        value: snapshot.data().total,
+        color: "indigo.6",
+      });
+    }
+
+    // const total = perUserChartData.reduce((accumulator,currentvalue) => {accumulator+currentvalue.total},0)
+
+    setUsagePerUserChartData(perUserChartData);
+    setChartLabels(chartLabels);
     setHistoryChartData(mainChartData.reverse());
   };
 
@@ -203,58 +216,62 @@ export function ItemmDetailsPage() {
       );
 
     return (
-      <Table>
-        <Table.Thead>
-          <Table.Tr>
-            <Table.Th>Capacity</Table.Th>
-            <Table.Th>User</Table.Th>
-            <Table.Th>Bottle</Table.Th>
-            <Table.Th>Syrup</Table.Th>
-            <Table.Th>Cylinder</Table.Th>
-            <Table.Th>Date</Table.Th>
-          </Table.Tr>
-        </Table.Thead>
-        <Table.Tbody>
-          {historyData.map((data) => {
-            return (
-              <Table.Tr key={data.id}>
-                <Table.Td>{`${data.capacity}ml`}</Table.Td>
-                <Table.Td>
-                  {
-                    users.find((value) => {
-                      return value.id == data.userId;
-                    }).displayName
-                  }
-                </Table.Td>
-                <Table.Td>
-                  {data.bottleId == ""
-                    ? "None"
-                    : itemList.find((item) => {
-                        return item.id == data.bottleId;
-                      }).name}
-                </Table.Td>
-                <Table.Td>
-                  {data.syrupId == ""
-                    ? "None"
-                    : itemList.find((item) => {
-                        return item.id == data.syrupId;
-                      }).name}
-                </Table.Td>
-                <Table.Td>
-                  {data.cylinderId == ""
-                    ? "None"
-                    : itemList.find((item) => {
-                        return item.id == data.cylinderId;
-                      }).name}
-                </Table.Td>
-                <Table.Td>{`${data.timestamp.toDate().getDate()}.${
-                  data.timestamp.toDate().getMonth() + 1
-                }.${data.timestamp.toDate().getFullYear()}`}</Table.Td>
-              </Table.Tr>
-            );
-          })}
-        </Table.Tbody>
-      </Table>
+      <Stack>
+        <Text>List of last usages</Text>
+        <Text>{`Number of entries : ${historyData.length}`}</Text>
+        <Table>
+          <Table.Thead>
+            <Table.Tr>
+              <Table.Th>Capacity</Table.Th>
+              <Table.Th>User</Table.Th>
+              <Table.Th>Bottle</Table.Th>
+              <Table.Th>Syrup</Table.Th>
+              <Table.Th>Cylinder</Table.Th>
+              <Table.Th>Date</Table.Th>
+            </Table.Tr>
+          </Table.Thead>
+          <Table.Tbody>
+            {historyData.map((data) => {
+              return (
+                <Table.Tr key={data.id}>
+                  <Table.Td>{`${data.capacity}ml`}</Table.Td>
+                  <Table.Td>
+                    {
+                      users.find((value) => {
+                        return value.id == data.userId;
+                      }).displayName
+                    }
+                  </Table.Td>
+                  <Table.Td>
+                    {data.bottleId == ""
+                      ? "None"
+                      : itemList.find((item) => {
+                          return item.id == data.bottleId;
+                        }).name}
+                  </Table.Td>
+                  <Table.Td>
+                    {data.syrupId == ""
+                      ? "None"
+                      : itemList.find((item) => {
+                          return item.id == data.syrupId;
+                        }).name}
+                  </Table.Td>
+                  <Table.Td>
+                    {data.cylinderId == ""
+                      ? "None"
+                      : itemList.find((item) => {
+                          return item.id == data.cylinderId;
+                        }).name}
+                  </Table.Td>
+                  <Table.Td>{`${data.timestamp.toDate().getDate()}.${
+                    data.timestamp.toDate().getMonth() + 1
+                  }.${data.timestamp.toDate().getFullYear()}`}</Table.Td>
+                </Table.Tr>
+              );
+            })}
+          </Table.Tbody>
+        </Table>
+      </Stack>
     );
   };
 
@@ -267,18 +284,39 @@ export function ItemmDetailsPage() {
       );
 
     return (
-      <AreaChart
+      <BarChart
+        unit="ml"
         h="100%"
         data={historyChartData}
         dataKey="date"
-        series={[
-          { name: "Water", color: "indigo.6" },
-        ]}
+        series={chartLabels}
         curveType="linear"
       />
     );
   };
-  const renderPerUserChart = async () => {};
+  const renderPerUserChart = () => {
+    if (!usagePerUserChartData)
+      return (
+        <Center h={"100%"}>
+          <Loader></Loader>
+        </Center>
+      );
+
+    console.log(usagePerUserChartData);
+    const total = usagePerUserChartData.reduce(
+      (sum, current) => sum + current.value,
+      0
+    );
+    return (
+      <Stack>
+        <DonutChart data={usagePerUserChartData} mx="auto" />
+        <Center>
+          <Text>{`Total : ${total}ml`}</Text>
+        </Center>
+      </Stack>
+    );
+    // return <Text>XD</Text>;
+  };
 
   const renderDeclareUsageForm = () => {
     if (isDeclareUsageLoading)
@@ -305,6 +343,9 @@ export function ItemmDetailsPage() {
                     return { label: item.name, value: item.id };
                   })
               )}
+              onChange={(event) => {
+                setDeclareBottleId(event.currentTarget.value);
+              }}
             />
           )}
           {item.category !== "syrup" && (
@@ -409,9 +450,7 @@ export function ItemmDetailsPage() {
 
         <Grid.Col span={{ sm: 12, md: 4 }}>
           <Paper withBorder shadow="xl" p="xl" h="100%">
-            <Stack>
-              <Text>Last used by</Text>
-            </Stack>
+            {renderPerUserChart()}
           </Paper>
         </Grid.Col>
 
@@ -423,10 +462,7 @@ export function ItemmDetailsPage() {
 
         <Grid.Col span={{ sm: 12, md: 12 }}>
           <Paper withBorder shadow="xl" p="xl" h="100%">
-            <Stack>
-              <Text>List of last usages</Text>
-              {renderHistory()}
-            </Stack>
+            {renderHistory()}
           </Paper>
         </Grid.Col>
       </Grid>
