@@ -179,7 +179,7 @@ export function ItemmDetailsPage() {
       perUserChartData.push({
         name: userData.displayName,
         value: snapshot.data().total,
-        color: "indigo.6",
+        color: userData.color,
       });
     }
 
