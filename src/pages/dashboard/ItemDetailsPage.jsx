@@ -2,12 +2,14 @@ import { useContext, useEffect, useState } from "react";
 import { NavLink, useParams } from "react-router-dom";
 import { firestore, storage } from "../../../firebaseConfig";
 import {
+  QuerySnapshot,
   addDoc,
   collection,
   doc,
   getAggregateFromServer,
   getDoc,
   getDocs,
+  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
@@ -36,6 +38,7 @@ export function ItemmDetailsPage() {
   const { user, householdId } = useContext(Context);
 
   const [isItemLoading, setIsItemLoading] = useState(true);
+  const [isDeclareUsageInProgress, setIsDeclareUsageInProgress] = useState(false)
   const [isItemHistoryLoading, setIsItemHistoryLoading] = useState(true);
   const [isDeclareUsageLoading, setIsDeclareUsageLoading] = useState(true);
   const [itemList, setItemList] = useState([]);
@@ -55,6 +58,10 @@ export function ItemmDetailsPage() {
   }, []);
 
   useEffect(() => {
+    handleHistoryLoad();
+  }, [historyData]);
+
+  useEffect(() => {
     handleDeclareUsage();
   }, [item]);
 
@@ -66,7 +73,6 @@ export function ItemmDetailsPage() {
 
   const handleItemLoad = async () => {
     const path = `households/${householdId}/items/${itemId}`;
-    console.log(path);
     const item = (await getDoc(doc(firestore, path))).data();
     item.id = itemId;
     item.image = await getDownloadURL(ref(storage, path));
@@ -86,40 +92,7 @@ export function ItemmDetailsPage() {
     setIsItemLoading(false);
   };
 
-  const handleGetHistory = async () => {
-    if (!item && itemList.length == 0) {
-      setIsItemHistoryLoading(true);
-      return;
-    }
-    const historyPath = `households/${householdId}/history`;
-    const usersPath = `users`;
-    const historyQuery = query(
-      collection(firestore, historyPath),
-      where(`${item.category}Id`, "==", item.id),
-      orderBy("timestamp", "desc")
-    );
-    const docsRef = await getDocs(historyQuery);
-    const historyData = docsRef.docs.map((docRef) => {
-      const item = docRef.data();
-      item.id = docRef.id;
-      return item;
-    });
-
-    const usersQuery = query(
-      collection(firestore, usersPath),
-      where(`householdId`, "==", householdId)
-    );
-    const usersRef = await getDocs(usersQuery);
-    const usersList = usersRef.docs.map((docRef) => {
-      const data = docRef.data();
-      data.id = docRef.id;
-      return data;
-    });
-
-    setUsers(usersList);
-    setHistoryData(historyData);
-    setIsItemHistoryLoading(false);
-
+  const handleHistoryLoad = async () => {
     const mainChartData = [];
 
     const today = new Date();
@@ -128,7 +101,6 @@ export function ItemmDetailsPage() {
     let historyIndex = 0;
     let currentData = { date: currentDate.toDateString() };
     const chartLabels = [{ name: "Water", color: "indigo.6" }];
-    console.log(itemList);
     while (mainChartData.length < 7 && historyIndex < historyData.length - 1) {
       if (
         currentDate.toDateString() ==
@@ -138,11 +110,8 @@ export function ItemmDetailsPage() {
           historyData[historyIndex].syrupId == ""
             ? "Water"
             : itemList.find((item) => {
-                console.log(item.id, historyData[historyIndex].syrupId);
                 return item.id == historyData[historyIndex].syrupId;
               }).name;
-        console.log(key);
-
         if (chartLabels.find((label) => label.name == key) == undefined) {
           const color = itemList.find(
             (item) => item.id == historyData[historyIndex].syrupId
@@ -165,11 +134,11 @@ export function ItemmDetailsPage() {
 
     const perUserChartData = [];
 
-    for (const userData of usersList) {
+    for (const userData of users) {
       const perUserChartQuery = query(
         collection(firestore, `households/${householdId}/history`),
         where("userId", "==", userData.id),
-        where(`${item.category}Id`,"==",itemId)
+        where(`${item.category}Id`, "==", itemId)
       );
       const snapshot = await getAggregateFromServer(perUserChartQuery, {
         total: sum("capacity"),
@@ -186,6 +155,50 @@ export function ItemmDetailsPage() {
     setUsagePerUserChartData(perUserChartData);
     setChartLabels(chartLabels);
     setHistoryChartData(mainChartData.reverse());
+  };
+
+  const handleGetHistory = async () => {
+    if (!item && itemList.length == 0) {
+      setIsItemHistoryLoading(true);
+      return;
+    }
+    const historyPath = `households/${householdId}/history`;
+    const usersPath = `users`;
+    const historyQuery = query(
+      collection(firestore, historyPath),
+      where(`${item.category}Id`, "==", item.id),
+      orderBy("timestamp", "desc")
+    );
+    // const docsRef = await getDocs(historyQuery);
+    // const historyData = docsRef.docs.map((docRef) => {
+    //   const item = docRef.data();
+    //   item.id = docRef.id;
+    //   return item;
+    // });
+
+    onSnapshot(historyQuery, (querySnapshot) => {
+      console.log(querySnapshot);
+      const historyData = querySnapshot.docs.map((docRef) => {
+        const item = docRef.data();
+        item.id = docRef.id;
+        return item;
+      });
+      setHistoryData(historyData);
+      setIsItemHistoryLoading(false);
+    });
+
+    const usersQuery = query(
+      collection(firestore, usersPath),
+      where(`householdId`, "==", householdId)
+    );
+    const usersRef = await getDocs(usersQuery);
+    const usersList = usersRef.docs.map((docRef) => {
+      const data = docRef.data();
+      data.id = docRef.id;
+      return data;
+    });
+
+    setUsers(usersList);
   };
 
   const handleDeclareUsage = async () => {
@@ -206,7 +219,8 @@ export function ItemmDetailsPage() {
   };
 
   const renderHistory = () => {
-    if (isItemHistoryLoading)
+    console.log("users:",users)
+    if (isItemHistoryLoading && users.length > 0)
       return (
         <Center>
           <Loader></Loader>
@@ -230,6 +244,7 @@ export function ItemmDetailsPage() {
           </Table.Thead>
           <Table.Tbody>
             {historyData.map((data) => {
+              console.log(data)
               return (
                 <Table.Tr key={data.id}>
                   <Table.Td>{`${data.capacity}ml`}</Table.Td>
@@ -237,7 +252,7 @@ export function ItemmDetailsPage() {
                     {
                       users.find((value) => {
                         return value.id == data.userId;
-                      }).displayName
+                      })?.displayName
                     }
                   </Table.Td>
                   <Table.Td>
@@ -261,9 +276,9 @@ export function ItemmDetailsPage() {
                           return item.id == data.cylinderId;
                         }).name}
                   </Table.Td>
-                  <Table.Td>{`${data.timestamp.toDate().getDate()}.${
-                    data.timestamp.toDate().getMonth() + 1
-                  }.${data.timestamp.toDate().getFullYear()}`}</Table.Td>
+                  <Table.Td>{`${data.timestamp?.toDate()?.getDate()}.${
+                    data.timestamp?.toDate()?.getMonth() + 1
+                  }.${data.timestamp?.toDate()?.getFullYear()}`}</Table.Td>
                 </Table.Tr>
               );
             })}
@@ -300,7 +315,6 @@ export function ItemmDetailsPage() {
         </Center>
       );
 
-    console.log(usagePerUserChartData);
     const total = usagePerUserChartData.reduce(
       (sum, current) => sum + current.value,
       0
@@ -383,7 +397,10 @@ export function ItemmDetailsPage() {
             />
           )}
           <Button
+            disabled={isDeclareUsageInProgress}
+            loading={isDeclareUsageInProgress}
             onClick={async () => {
+              setIsDeclareUsageInProgress(true)
               const path = `households/${householdId}/history`;
               if (declareBottleId === "" || declareCylinderId === "") return;
               const doc = await addDoc(collection(firestore, path), {
@@ -396,6 +413,7 @@ export function ItemmDetailsPage() {
                   return item.id == declareBottleId;
                 }).capacity,
               });
+              setIsDeclareUsageInProgress(false)
             }}
           >
             Confirm
