@@ -11,7 +11,6 @@ import {
   orderBy,
   query,
   serverTimestamp,
-  setDoc,
   sum,
   where,
 } from "firebase/firestore";
@@ -19,7 +18,6 @@ import { Context } from "./../../context/AuthContext";
 import {
   Button,
   Center,
-  Container,
   Grid,
   Image,
   Loader,
@@ -30,7 +28,7 @@ import {
   Text,
 } from "@mantine/core";
 import { getDownloadURL, ref } from "firebase/storage";
-import { AreaChart, BarChart, DonutChart } from "@mantine/charts";
+import { BarChart, DonutChart } from "@mantine/charts";
 
 export function ItemmDetailsPage() {
   const { id: itemId } = useParams();
